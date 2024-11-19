@@ -1,0 +1,10 @@
+{
+  "development": {
+    "client": "client_CH2ACIWYFHWTLNNRURNPHP5S-Z7HF34XYSBWANDQV",
+    "server": "server_J3QFCV22UZW3BYYAFHABMITT-Z7HF34XYSBWANDQV"
+  },
+  "production": {
+    "client": "client_TYRSI3M7I5ULYERGSL465BO4-Z7HF34XYSBWANDQV",
+    "server": "server_RU65SSD4VW3TKK5IP6WCIT4M-Z7HF34XYSBWANDQV"
+  }
+}

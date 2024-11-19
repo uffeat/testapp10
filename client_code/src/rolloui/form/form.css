@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove arrows from number-type input */
+/* WebKit browsers (Chrome, Safari, Edge) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Make form buttons look disabled-ish for invalid forms (does NOT actually disable the buttons) */
+form:invalid button {
+  opacity: 0.8;
+}
+
+/* Change the show/hide feedback mechanism from 'display' to 'visibility' to avoid vertical shifts. */
+.invalid-feedback {
+  display: block;
+  visibility: hidden;
+}
+.invalid-feedback:not(:empty) {
+  visibility: visible;
+}
+
+/* Ensure that empty feedbacks have the same height as non-empty feedbacks to avoid vertical shifts. */
+.invalid-feedback:empty::after {
+  content: "x";
+  visibility: hidden;
+}
+
+/* Resize label and feedback text */
+.form-label,
+.invalid-feedback {
+  font-size: 0.875rem;
+}
+
+
+
+/* Show feedback as non-error */
+/* NOTE Commented-out as I've made a JS implementation instead */
+/*
+.form-label:has(.form-control:not(.is-invalid):not([data-visited]))
+  .invalid-feedback {
+  color: initial;
+  opacity: 0.5;
+}
+*/
+
+
+/*
+*:has(.form-control):has(.invalid-feedback):not(:has(.form-label)) {
+ border: 1px solid green;
+}
+ */

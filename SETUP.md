@@ -1,16 +1,15 @@
 
 # Vite:
-
 npm create vite@latest
-
 Perhaps:
 npm i @rollup/plugin-dynamic-import-vars
 
-
-
 # Tailwind
 npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+npx tailwindcss init -
+npm install stylelint stylelint-config-standard --save-dev
+
+
 In .vscode/setting.json:
 ```
 "files.associations": {
@@ -37,6 +36,9 @@ Ref in index.html:
 npm install @headlessui/vue @heroicons/vue
 npm install @tailwindcss/forms
 
+
+
+Perhaps:
 npm install --save clsx
 
 
@@ -64,5 +66,7 @@ export default {
 
 ```
 
-
-
+# Bootstrap
+npm i --save bootstrap @popperjs/core
+npm i --save-dev sass
+npm i bootstrap-icons
