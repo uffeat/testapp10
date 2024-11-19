@@ -1,0 +1,39 @@
+# Vite defaults: Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Vite defaults: Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vite defaults: Misc
+node_modules
+dist
+dist-ssr
+*.local
+
+# Anvil defaults
+*.pyc
+*.pyo
+__pycache__
+.anvil-data
+
+# Custom
+uplink_keys.json
+scratch_code/
+NOTES.md
+NOTES.txt
+TODO.txt
+TODO.md

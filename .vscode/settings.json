@@ -1,0 +1,8 @@
+{
+  "files.autoSave": "afterDelay",
+  "editor.fontFamily": "'JetBrains Mono', 'Consolas', 'Courier New', monospace",
+  "editor.tabSize": 2,
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}
