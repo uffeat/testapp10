@@ -16,7 +16,7 @@ const button_style =
   <button type="button" :class="button_style">Button text</button>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 
 
 button {

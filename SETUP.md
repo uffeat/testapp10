@@ -8,6 +8,29 @@ npm i @rollup/plugin-dynamic-import-vars
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -
 npm install stylelint stylelint-config-standard --save-dev
+npm install stylelint-config-recommended --save-dev
+npm install stylelint-config-css-modules --save-dev
+
+In .stylelintrc.json:
+```
+{
+  "extends": ["stylelint-config-recommended", "stylelint-config-standard", "stylelint-config-css-modules"],
+  "rules": {
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": ["tailwind", "apply", "layer", "variants", "responsive", "screen"]
+      }
+    ]
+  }
+}
+
+```
+Add to settings.json:
+```
+"scss.validate": false,
+"css.validate": false
+```
 
 
 In .vscode/setting.json:

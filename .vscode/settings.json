@@ -7,5 +7,7 @@
   },
   "editor.quickSuggestions": {
     "strings": "on"
-  }
+  },
+  "scss.validate": false,
+  "css.validate": false
 }
