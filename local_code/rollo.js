@@ -223,57 +223,190 @@ class Reactive {
 
 const registry = {};
 
-export function create_element(arg, { parent, state, ...props } = {}, ...args) {
-  /* Extract tag and css_classes from arg */
-  const [tag, ...css_classes] = arg.split(".");
-  const element = new (get_web_component(tag))();
-  /* Add css classes */
-  if (css_classes.length > 0) {
-    /* NOTE Condition avoids adding empty class attr */
-    element.classList.add(...css_classes);
-  }
 
-  /* Set props */
-  for (const [key, value] of Object.entries(props)) {
-    if (key.startsWith("_")) {
-      element[key] = value;
-    } else if (key in element) {
-      element[key] = value;
-    } else if (key in element.style) {
-      element.style[key] = value;
-    } else {
-      throw new Error(`Invalid key: ${key}`);
+const factory = new (class Factory {
+  static #can_have_shadow = (tag) => {
+    const element = document.createElement(tag);
+    try {
+      element.attachShadow({ mode: "open" });
+      return true;
+    } catch {
+      return false;
     }
   }
 
-  if (state) {
-    for (const [key, value] of Object.entries(state)) {
-      element.$[key] = value;
-    }
-  }
 
-  /* Parse args (children and hooks) */
-  const fragment = document.createElement("div");
-  for (const arg of args) {
-    if (arg === undefined) {
-      continue;
+  #registry = {};
+  get = (tag) => {
+    if (tag in this.#registry) {
+      return this.#registry[tag];
     }
-    if (typeof arg === "function") {
-      arg.call(element, fragment);
-      continue;
+    const WebComponent = this.#create(tag);
+    this.#registry[tag] = WebComponent;
+    return WebComponent;
+  };
+  #create = (tag) => {
+    const base = document.createElement(tag).constructor;
+    if (base === HTMLUnknownElement) {
+      throw new Error(`Invalid tag: ${tag}`);
     }
-    fragment.append(arg);
-  }
-  /* Append children */
-  element.append(...fragment.children);
+    let WebComponent = class Base extends base {
+      constructor() {
+        super();
+        /* Identify as web component. */
+        this.setAttribute("web-component", "");
+      }
+      connectedCallback() {
+        this.$.connected = true;
+        this.dispatchEvent(new Event("connected"));
+      }
+      disconnectedCallback() {
+        this.$.connected = false;
+        this.dispatchEvent(new Event("disconnected"));
+      }
+      /* Provides external access to super. */
+      get __super__() {
+        return this.#__super__;
+      }
+      #__super__ = new Proxy(this, {
+        get: (target, key) => {
+          return super[key];
+        },
+        set: (target, key, value) => {
+          super[key] = value;
+          return true;
+        },
+      });
+      /* Returns controller for managing subscriptions. */
+      get effects() {
+        return this.#reactive.effects;
+      }
+      /* Returns an object, from which single state items can be retrieved 
+    and set to trigger effects. */
+      get $() {
+        return this.#reactive.$;
+      }
+      get reactive() {
+        return this.#reactive;
+      }
+      #reactive = Reactive.create(null, { owner: this });
+      get text() {
+        return this.textContent;
+      }
+      set text(text) {
+        this.textContent = text;
+      }
+      update = (props) => {
+        for (const [key, value] of Object.entries(props)) {
+          if (key.startsWith("_")) {
+            this[key] = value;
+          } else if (key in this) {
+            this[key] = value;
+          } else if (key in this.style) {
+            this.style[key] = value;
+          } else {
+            throw new Error(`Invalid key: ${key}`);
+          }
+        }
+      };
+    };
+    if (Factory.#can_have_shadow(tag)) {
+      WebComponent = class ShadowBase extends WebComponent {
+        constructor(...args) {
+          super(...args);
+          /* Init shadow-dom-enabled state */
+          this.$.has_children = false;
+          this.$.has_content = false;
+          this.attachShadow({ mode: "open" });
+          const slot = document.createElement("slot");
+          this.shadowRoot.append(slot);
+          slot.addEventListener("slotchange", (event) => {
+            this.dispatchEvent(new Event("slotchange"));
+            /* Update state */
+            this.$.has_children = this.children.length > 0;
+            this.$.has_content = this.childNodes.length > 0;
+          });
+        }
+      };
+    }
+    customElements.define(`native-${tag}`, WebComponent, {
+      extends: tag,
+    });
+    return WebComponent;
+  };
+})();
 
-  if (parent && element.parentElement !== parent) {
-    parent.append(element);
-    parent.dispatchEvent(new CustomEvent("child", { detail: element }));
-  }
+export const components = new (class Components {
+  create = (arg, { parent, state, ...props } = {}, ...args) => {
+    /* Extract tag and css_classes from arg */
+    const [tag, ...css_classes] = arg.split(".");
+    const element = new (factory.get(tag))();
+    /* Add css classes */
+    if (css_classes.length > 0) {
+      /* NOTE Condition avoids adding empty class attr */
+      element.classList.add(...css_classes);
+    }
+    element.update(props);
+    if (state) {
+      element.reactive.update(state);
+    }
+    /* Parse args (children and hooks) */
+    const fragment = document.createElement("div");
+    for (const arg of args) {
+      if (arg === undefined) {
+        continue;
+      }
+      if (typeof arg === "function") {
+        arg.call(element, fragment);
+        continue;
+      }
+      fragment.append(arg);
+    }
+    /* Append children */
+    element.append(...fragment.children);
+    if (parent && element.parentElement !== parent) {
+      parent.append(element);
+      parent.dispatchEvent(new CustomEvent("child", { detail: element }));
+    }
+    return element;
+  };
+})();
 
-  return element;
+export const create_element = components.create;
+
+/* Use with small source classes. */
+export function compose(...sources) {
+  for (const source of sources) {
+    const composition = new source(this);
+    if (!source.name) {
+      throw new Error(
+        `Composition class should be declared with a name or have a static 'name' prop.`
+      );
+    }
+    Object.defineProperty(this, source.name, {
+      enumerable: false,
+      configurable: true,
+      get: () => composition,
+    });
+  }
+  return this;
 }
+
+/* Use with small source classes. */
+export function mixin(source, ...args) {
+  for (const [name, descriptor] of Object.entries(
+    Object.getOwnPropertyDescriptors(source.prototype)
+  )) {
+    if (name === "__init__") {
+      descriptor.value.call(this, ...args);
+      continue;
+    }
+    Object.defineProperty(this, name, descriptor);
+  }
+  return this;
+}
+
+/* Private helpers */
 
 function can_have_shadow(tag) {
   const element = document.createElement(tag);
@@ -285,92 +418,7 @@ function can_have_shadow(tag) {
   }
 }
 
-function create_web_component(tag) {
-  const base = document.createElement(tag).constructor;
-  if (base === HTMLUnknownElement) {
-    throw new Error(`Invalid tag: ${tag}`);
-  }
-  let Component = class Base extends base {
-    constructor() {
-      super();
-      /* Identify as web component. */
-      this.setAttribute("web-component", "");
-    }
-    connectedCallback() {
-      this.$.connected = true;
-      this.dispatchEvent(new Event("connected"));
-    }
-    disconnectedCallback() {
-      this.$.connected = false;
-      this.dispatchEvent(new Event("disconnected"));
-    }
-    /* Provides external access to super. */
-    get __super__() {
-      return this.#__super__;
-    }
-    #__super__ = new Proxy(this, {
-      get: (target, key) => {
-        return super[key];
-      },
-      set: (target, key, value) => {
-        super[key] = value;
-        return true;
-      },
-    });
 
-    /* Returns controller for managing subscriptions. */
-    get effects() {
-      return this.#reactive.effects;
-    }
-    /* Returns an object, from which single state items can be retrieved 
-    and set to trigger effects. */
-    get $() {
-      return this.#reactive.$;
-    }
-    get reactive() {
-      return this.#reactive
-    }
-    #reactive = Reactive.create(null, { owner: this });
-    get text() {
-      return this.textContent;
-    }
-    set text(text) {
-      this.textContent = text;
-    }
-  };
-  if (can_have_shadow(tag)) {
-    Component = class ShadowBase extends Component {
-      constructor(...args) {
-        super(...args);
-        /* Init shadow-dom-enabled state */
-        this.$.has_children = false;
-        this.$.has_content = false;
-        this.attachShadow({ mode: "open" });
-        const slot = document.createElement("slot");
-        this.shadowRoot.append(slot);
-        slot.addEventListener("slotchange", (event) => {
-          this.dispatchEvent(new Event("slotchange"));
-          /* Update state */
-          this.$.has_children = this.children.length > 0;
-          this.$.has_content = this.childNodes.length > 0;
-        });
-      }
-    };
-  }
-  customElements.define(`native-${tag}`, Component, {
-    extends: tag,
-  });
-  return Component;
-}
-
-function get_web_component(tag) {
-  if (tag in registry) {
-    return registry[tag];
-  }
-  const Component = create_web_component(tag);
-  registry[tag] = Component;
-  return Component;
-}
 
 function camel_to_kebab(camel) {
   return camel.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
