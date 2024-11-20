@@ -221,9 +221,6 @@ class Reactive {
   };
 }
 
-const registry = {};
-
-
 const factory = new (class Factory {
   static #can_have_shadow = (tag) => {
     const element = document.createElement(tag);
@@ -233,10 +230,9 @@ const factory = new (class Factory {
     } catch {
       return false;
     }
-  }
-
-
+  };
   #registry = {};
+  /* Returns non-autonomous web component class. */
   get = (tag) => {
     if (tag in this.#registry) {
       return this.#registry[tag];
@@ -264,6 +260,7 @@ const factory = new (class Factory {
         this.$.connected = false;
         this.dispatchEvent(new Event("disconnected"));
       }
+
       /* Provides external access to super. */
       get __super__() {
         return this.#__super__;
@@ -277,26 +274,155 @@ const factory = new (class Factory {
           return true;
         },
       });
+
+      /* Returns an object, from which single state items can be retrieved 
+      and set to trigger effects. */
+      get $() {
+        return this.#reactive.$;
+      }
+
+      /* Provides a prop-like interface to attrs. */
+      get attr() {
+        return this.#attr;
+      }
+      #attr = new Proxy(this, {
+        get(target, key) {
+          key = camel_to_kebab(key);
+          if (!target.hasAttribute(key)) {
+            return null;
+          }
+          const value = target.getAttribute(key);
+          if (value === "") {
+            return true;
+          }
+          const number = Number(value);
+          if (typeof number === "number" && number === number) {
+            return number;
+          }
+          return value;
+        },
+        set(target, key, value) {
+          if (value === undefined) return true;
+          key = camel_to_kebab(key);
+          if ([false, null].includes(value)) {
+            /* Remove attr */
+            target.removeAttribute(key);
+            return true;
+          }
+          if (["", true].includes(value)) {
+            /* Set no-value attr */
+            target.setAttribute(key, "");
+            return true;
+          }
+          /* Set value attr */
+          if (!["number", "string"].includes(typeof value)) {
+            throw new Error(`Invalid attr value: ${value}`);
+          }
+          target.setAttribute(key, value);
+          return true;
+        },
+      });
+
+      /* Provides a prop-like interface to controlling css class. */
+      get css_class() {
+        return this.#css_class;
+      }
+      #css_class = new Proxy(this, {
+        get(target, css_class) {
+          return target.classList.contains(css_class);
+        },
+        set(target, css_class, value) {
+          if (value) {
+            target.classList.add(css_class);
+          } else {
+            target.classList.remove(css_class);
+          }
+          return true;
+        },
+      });
+
+      /* Provides a prop-like interface to component-scoped css vars. */
+      get css_var() {
+        return this.#css_var;
+      }
+      #css_var = new Proxy(this, {
+        get(target, key) {
+          /* 
+        TODO 
+        Perhaps provide additional ways to retrieve css var?
+        Not sure, if the current approach is adequate, if css var has been set inline?
+        Do some testing to check...  
+        */
+          return getComputedStyle(target).getPropertyValue(`--${key}`).trim();
+        },
+        set(target, key, value) {
+          if (value) {
+            target.style.setProperty(`--${key}`, value);
+          } else {
+            target.style.removeProperty(`--${key}`);
+          }
+          return true;
+        },
+      });
+
       /* Returns controller for managing subscriptions. */
       get effects() {
         return this.#reactive.effects;
       }
-      /* Returns an object, from which single state items can be retrieved 
-    and set to trigger effects. */
-      get $() {
-        return this.#reactive.$;
-      }
+
       get reactive() {
         return this.#reactive;
       }
       #reactive = Reactive.create(null, { owner: this });
+
       get text() {
         return this.textContent;
       }
       set text(text) {
         this.textContent = text;
       }
-      update = (props) => {
+
+      /* Returns array of unique descendant elements that match ANY selectors. 
+      Returns null, if no matches.
+      A more versatile alternative to querySelectorAll with a return value 
+      that array methods can be used directly on (unless null)
+      - And I can avoid writing the clunky 'querySelectorAll' :-) */
+      get = (...selectors) => {
+        const elements = [
+          ...new Set(
+            selectors
+              .map((selector) => [...this.querySelectorAll(selector)])
+              .flat()
+          ),
+        ];
+        return elements.lenght === 0 ? null : elements
+      };
+
+      /* Dispatches custom event and returns detail. */
+      send_event = (type, { detail, ...options } = {}) => {
+        this.dispatchEvent(new CustomEvent(type, { detail, ...options }));
+        /* NOTE If detail is mutable, it's handy to get it back, 
+        since handler may have mutated it. This enables two-way communication 
+        between event target and handler. */
+        return detail;
+      };
+
+      /* Updates props and state. */
+      update = (updates) => {
+        const props = Object.fromEntries(
+          Object.entries(updates).filter(([key, value]) => !key.startsWith("$"))
+        );
+        this.#update_props(props);
+
+        const state = Object.fromEntries(
+          Object.entries(updates)
+            .filter(([key, value]) => key.startsWith("$"))
+            .map(([key, value]) => [key.slice(1), value])
+        );
+        this.reactive.update(state);
+      };
+
+      #update_props = (props) => {
         for (const [key, value] of Object.entries(props)) {
           if (key.startsWith("_")) {
             this[key] = value;
@@ -337,7 +463,7 @@ const factory = new (class Factory {
 })();
 
 export const components = new (class Components {
-  create = (arg, { parent, state, ...props } = {}, ...args) => {
+  create = (arg, { parent, ...updates } = {}, ...args) => {
     /* Extract tag and css_classes from arg */
     const [tag, ...css_classes] = arg.split(".");
     const element = new (factory.get(tag))();
@@ -346,33 +472,35 @@ export const components = new (class Components {
       /* NOTE Condition avoids adding empty class attr */
       element.classList.add(...css_classes);
     }
-    element.update(props);
-    if (state) {
-      element.reactive.update(state);
-    }
+    element.update(updates);
+
     /* Parse args (children and hooks) */
+    parent = parent && element.parentElement !== parent ? parent : undefined;
     const fragment = document.createElement("div");
     for (const arg of args) {
       if (arg === undefined) {
         continue;
       }
       if (typeof arg === "function") {
-        arg.call(element, fragment);
+        arg.call(element, fragment, parent);
         continue;
       }
       fragment.append(arg);
     }
     /* Append children */
     element.append(...fragment.children);
-    if (parent && element.parentElement !== parent) {
+
+    /* Add to parent */
+    if (parent) {
       parent.append(element);
       parent.dispatchEvent(new CustomEvent("child", { detail: element }));
+    } else {
     }
     return element;
   };
 })();
 
-export const create_element = components.create;
+export const create = components.create;
 
 /* Use with small source classes. */
 export function compose(...sources) {
@@ -407,18 +535,6 @@ export function mixin(source, ...args) {
 }
 
 /* Private helpers */
-
-function can_have_shadow(tag) {
-  const element = document.createElement(tag);
-  try {
-    element.attachShadow({ mode: "open" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-
 
 function camel_to_kebab(camel) {
   return camel.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
