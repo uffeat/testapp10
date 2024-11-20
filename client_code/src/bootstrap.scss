@@ -1,1 +1,7 @@
 @import "bootstrap/scss/bootstrap";
+
+/* Prevent horizontal shifts, when modal opens/closes. */
+body.modal-open {
+  width: 100vw;
+  overflow-y: auto !important;
+}

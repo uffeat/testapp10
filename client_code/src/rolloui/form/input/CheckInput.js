@@ -1,7 +1,7 @@
 import { create } from "rollo/component";
-import { base } from "./base";
-import { ErrorFeedback } from "../ErrorFeedback";
-import { create_id } from "../utils/create_id";
+import { base } from "rolloui/form/input/base";
+import { ErrorFeedback } from "rolloui/form/ErrorFeedback";
+import { create_id } from "rolloui/form/utils/create_id";
 
 /* Returns checkbox-type input element with reactive type-aligned value prop. 
 Use as base for building more specialized components. */

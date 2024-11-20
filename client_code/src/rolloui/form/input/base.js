@@ -1,4 +1,4 @@
-import "../form.css";
+import 'rolloui/form/form.css'
 import { create } from "rollo/component";
 
 export function base(

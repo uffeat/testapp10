@@ -10,7 +10,7 @@ const form = create(
   { parent: root, noValidate: true },
   create("h1", {}, "Hi"),
   FileInput({ label: "My file", name: "my_file", required: true }),
-  FileInput({ name: "my_files", multiple: true, required: true }),
+  FileInput({  label: "My files", name: "my_files", multiple: true, required: true }),
   FileInput({
     floating: true,
     label: "My file",

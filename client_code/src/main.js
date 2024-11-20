@@ -4,15 +4,37 @@ import './main.css'
 import { createApp } from 'vue'
 
 import App from './App.vue'
+
 import { create } from 'rollo/component'
 
-create('div', {id: 'app', parent: document.body})
+const app_element = create('div', {id: 'app', parent: document.body})
 
-import 'rolloui/form/form.css'
+import { FileInput } from "./rolloui/form/input/FileInput";
 
-create('div.form-check.form-switch', {parent: document.body},
-  create('input.form-check-input', {type: 'checkbox', role: "switch"})
-)
+
+create('div', {id: 'root', parent: document.body})
+const form = create(
+  "form.d-flex.flex-column.row-gap-3.p-3",
+  { parent: root, noValidate: true },
+  create("h1", {}, "Hi"),
+  FileInput({ label: "My file", name: "my_file", required: true }),
+  FileInput({  label: "My files", name: "my_files", multiple: true, required: true }),
+  FileInput({
+    floating: true,
+    label: "My file",
+    name: "my_floating_file",
+    required: true,
+  }),
+  FileInput({
+    floating: true,
+    label: "My files",
+    multiple: true,
+    name: "my_floating_files",
+    required: true,
+  })
+);
+
+
 
 const app = createApp(App)
 // Do any configs before mount

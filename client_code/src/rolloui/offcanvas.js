@@ -1,8 +1,7 @@
-import "@/bootstrap.scss";
 
 import { Offcanvas } from "bootstrap";
 
-import { create } from "rollo/component"; ////
+import { create } from "rollo/component";
 
 
 const ID = "Offcanvas";
@@ -25,37 +24,37 @@ export function offcanvas(
   }
 
   // Create offcanvas element
-  const element = create_element(
+  const element = create(
     // Handle placement
     `div.offcanvas.offcanvas-${placement}.d-flex.flex-column`,
     { id: ID, parent: document.body },
-    create_element(
+    create(
       `header.offcanvas-header`,
       {},
       // Handle title
       function () {
         if (title) {
           if (typeof title === "string") {
-            title = create_element("h1.fs-2.text", {}, title);
+            title = create("h1.fs-2.text", {}, title);
           }
           return title;
         }
       },
 
-      create_element(`button.btn-close`, { type: "button" })
+      create(`button.btn-close`, { type: "button" })
         .update_dataset({
           bsDismiss: "offcanvas",
         })
         .update_attrs({ "aria-label": "Close" })
     ),
-    create_element(
+    create(
       `main.offcanvas-body.flex-grow-1`,
       {},
       // Handle content
       function () {
         if (content) {
           if (typeof content === "string") {
-            content = create_element("p", {}, content);
+            content = create("p", {}, content);
           }
           return content;
         }
@@ -63,15 +62,15 @@ export function offcanvas(
     ),
     function () {
       if (buttons.length > 0) {
-        const menu = create_element(
+        const menu = create(
           "menu.d-flex.justify-content-end.column-gap-3.p-3.m-0"
         );
-        const footer = create_element(`footer`, {}, menu);
+        const footer = create(`footer`, {}, menu);
         for (const b of buttons) {
           if (Array.isArray(b)) {
             let [text, value, style] = b;
             style = style ? `.btn-${style}` : "";
-            const button = create_element(
+            const button = create(
               `button.btn${style}`,
               {
                 onclick: () => close(value),

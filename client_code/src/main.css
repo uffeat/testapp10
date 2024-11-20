@@ -3,9 +3,6 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter;
-  line-height: 1.5;
-  font-weight: 400;
 }
 
 /*** Structure */
@@ -19,6 +16,11 @@ body {
   as this would push behind any vertical scrollbars. */
   width: 100%;
   margin: 0;
+
+  /* font-family: Inter;*/
+  font-family: InterVariable;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
 #app {
@@ -30,4 +32,9 @@ main {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+}
+
+/*** Elements */
+a {
+  text-decoration: none;
 }

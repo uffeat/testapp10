@@ -1,5 +1,5 @@
 import { create } from "rollo/component";
-import { create_id } from "./utils/create_id";
+import { create_id } from "rolloui/form/utils/create_id";
 
 export function Label(input_element, props = {}, ...children) {
   return create(

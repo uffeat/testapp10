@@ -1,11 +1,11 @@
-//import "./form.css";
-import { Cancel as CancelIcon } from "rollo/icons/Cancel.js";
-import { Upload as SelectIcon } from "rollo/icons/Upload.js";
+import 'rolloui/form/form.css'
+import { Cancel as CancelIcon } from "rollo/icons/Cancel";
+import { Upload as SelectIcon } from "rollo/icons/Upload";
 import { create } from "rollo/component";
-import { ErrorFeedback } from "../ErrorFeedback";
-import { FormFloating } from "../FormFloating";
-import { InputGroup } from "../InputGroup";
-import { create_id } from "../utils/create_id";
+import { ErrorFeedback } from "rolloui/form/ErrorFeedback";
+import { FormFloating } from "rolloui/form/FormFloating";
+import { InputGroup } from "rolloui/form/InputGroup";
+import { create_id } from "rolloui/form/utils/create_id";
 
 export function FileInput(
   {

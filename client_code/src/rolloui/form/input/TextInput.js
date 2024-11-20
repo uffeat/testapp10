@@ -1,4 +1,5 @@
-import { base } from "./base";
+import 'rolloui/form/form.css'
+import { base } from "rolloui/form/input/base";
 
 
 // TODO label and float

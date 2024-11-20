@@ -1,4 +1,4 @@
-import { create } from "../utils/component.js";
+import { create } from "rollo/component.js";
 
 export function Upload({ color = "currentColor", size = 16 } = {}) {
   return create("span", {

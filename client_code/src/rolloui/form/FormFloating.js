@@ -1,5 +1,5 @@
 import { create } from "rollo/component";
-import { create_id } from "./utils/create_id";
+import { create_id } from "rolloui/form/utils/create_id";
 
 export function FormFloating({ label, ...props }, input_element, ...children) {
   input_element.placeholder = '';
