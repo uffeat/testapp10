@@ -233,7 +233,6 @@ const components = new (class Components {
     add = (condition, factory) => {
       this.#registry.push([condition, factory]);
     };
-
     /* Returns factories relevant for a given tag */
     get = (tag) => {
       const factories = [];
@@ -246,12 +245,11 @@ const components = new (class Components {
     };
   })()
 
-  
-
   get factories() {
     return this.#factories
   };
 
+  /* Returns instance of non-autonomous web component  */
   create = (arg, { parent, ...updates } = {}, ...args) => {
     /* Extract tag and css_classes from arg */
     const [tag, ...css_classes] = arg.split(".");
@@ -293,7 +291,6 @@ const components = new (class Components {
     if (tag in this.#registry) {
       return this.#registry[tag];
     }
-
     const native = document.createElement(tag).constructor;
     if (native === HTMLUnknownElement) {
       throw new Error(`Invalid tag: ${tag}`);
@@ -310,29 +307,28 @@ const components = new (class Components {
     return WebComponent;
   };
 
+  /* Builds and returns web component class from native base and factories. */
   author = (native, ...factories) => {
-    let WebComponent = factories.shift()(native);
+    let WebComponent = this.#base(native);
     for (const factory of factories) {
       WebComponent = factory(WebComponent);
     }
     return WebComponent;
   };
-})();
 
-/* Factories */
-components.factories.add(
-  (tag) => true,
-  (parent) => {
-    return class Base extends parent {
+  #base = (native) => {
+    return class ReactiveBase extends native {
       constructor() {
         super();
         /* Identify as web component. */
         this.setAttribute("web-component", "");
       }
+
       connectedCallback() {
         this.$.connected = true;
         this.dispatchEvent(new Event("connected"));
       }
+
       disconnectedCallback() {
         this.$.connected = false;
         this.dispatchEvent(new Event("disconnected"));
@@ -353,10 +349,66 @@ components.factories.add(
       });
 
       /* Returns an object, from which single state items can be retrieved 
-    and set to trigger effects. */
+      and set to trigger effects. */
       get $() {
         return this.#reactive.$;
       }
+
+      /* Returns controller for managing subscriptions. */
+      get effects() {
+        return this.#reactive.effects;
+      }
+
+      get reactive() {
+        return this.#reactive;
+      }
+      #reactive = Reactive.create(null, { owner: this });
+
+      /* Updates props and state. */
+      update = (updates) => {
+        const props = Object.fromEntries(
+          Object.entries(updates).filter(([key, value]) => !key.startsWith("$"))
+        );
+        for (const [key, value] of Object.entries(props)) {
+          if (key.startsWith("_")) {
+            this[key] = value;
+          } else if (key in this) {
+            this[key] = value;
+          } else if (key in this.style) {
+            this.style[key] = value;
+          } else {
+            throw new Error(`Invalid key: ${key}`);
+          }
+        }
+
+        const state = Object.fromEntries(
+          Object.entries(updates)
+            .filter(([key, value]) => key.startsWith("$"))
+            .map(([key, value]) => [key.slice(1), value])
+        );
+        this.reactive.update(state);
+      };
+
+
+
+    }
+  }
+})();
+
+/* Factories */
+components.factories.add(
+  (tag) => true,
+  (parent) => {
+    return class Component extends parent {
+      constructor() {
+        super();
+
+      }
+      
+
+      
+
+      
 
       /* Provides a prop-like interface to attrs. */
       get attribute() {
@@ -442,10 +494,7 @@ components.factories.add(
         },
       });
 
-      /* Returns controller for managing subscriptions. */
-      get effects() {
-        return this.#reactive.effects;
-      }
+      
 
       get on() {
         return this.#on;
@@ -460,10 +509,7 @@ components.factories.add(
         },
       });
 
-      get reactive() {
-        return this.#reactive;
-      }
-      #reactive = Reactive.create(null, { owner: this });
+      
 
       get text() {
         return this.textContent;
@@ -497,34 +543,7 @@ components.factories.add(
         return detail;
       };
 
-      /* Updates props and state. */
-      update = (updates) => {
-        const props = Object.fromEntries(
-          Object.entries(updates).filter(([key, value]) => !key.startsWith("$"))
-        );
-        this.#update_props(props);
-
-        const state = Object.fromEntries(
-          Object.entries(updates)
-            .filter(([key, value]) => key.startsWith("$"))
-            .map(([key, value]) => [key.slice(1), value])
-        );
-        this.reactive.update(state);
-      };
-
-      #update_props = (props) => {
-        for (const [key, value] of Object.entries(props)) {
-          if (key.startsWith("_")) {
-            this[key] = value;
-          } else if (key in this) {
-            this[key] = value;
-          } else if (key in this.style) {
-            this.style[key] = value;
-          } else {
-            throw new Error(`Invalid key: ${key}`);
-          }
-        }
-      };
+      
     };
   }
 );
