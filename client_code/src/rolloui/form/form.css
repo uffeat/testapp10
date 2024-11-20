@@ -40,8 +40,6 @@ form:invalid button {
   font-size: 0.875rem;
 }
 
-
-
 /* Show feedback as non-error */
 /* NOTE Commented-out as I've made a JS implementation instead */
 /*
@@ -52,9 +50,10 @@ form:invalid button {
 }
 */
 
-
-/*
-*:has(.form-control):has(.invalid-feedback):not(:has(.form-label)) {
- border: 1px solid green;
+/* Explicitly repeat Bootstrap defaults to enable co-existence with Tailwind */
+.form-switch .form-check-input {
+  background-size: contain;
 }
- */
+.form-switch .form-check-input:checked {
+  background-image: var(--bs-form-switch-bg);
+}

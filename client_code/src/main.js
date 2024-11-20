@@ -8,6 +8,12 @@ import { create } from 'rollo/component'
 
 create('div', {id: 'app', parent: document.body})
 
+import 'rolloui/form/form.css'
+
+create('div.form-check.form-switch', {parent: document.body},
+  create('input.form-check-input', {type: 'checkbox', role: "switch"})
+)
+
 const app = createApp(App)
 // Do any configs before mount
 app.mount('#app')
