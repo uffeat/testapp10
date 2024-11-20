@@ -222,71 +222,39 @@ class Reactive {
   };
 }
 
-/* Uility for composing and registering non-autonomous web components on demand. */
-const components = new (class Components {
+
+const factories = new (class Factories{
+  #registry = []
+
+})()
+
+
+
+
+/*  */
+const factory = new (class Factory {
+  #factories = new Map()
+
   
+
+
+  static #can_have_shadow = (tag) => {
+    const element = document.createElement(tag);
+    try {
+      element.attachShadow({ mode: "open" });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   #registry = {};
 
-  #factories = new (class Factories {
-    #registry = [];
-    /* Registers conditional web component class factory */
-    add = (condition, factory) => {
-      this.#registry.push([condition, factory]);
-    };
 
-    /* Returns factories relevant for a given tag */
-    get = (tag) => {
-      const factories = [];
-      for (const [condition, factory] of this.#registry) {
-        if (condition(tag)) {
-          factories.push(factory);
-        }
-      }
-      return factories
-    };
-  })()
 
-  
 
-  get factories() {
-    return this.#factories
-  };
 
-  create = (arg, { parent, ...updates } = {}, ...args) => {
-    /* Extract tag and css_classes from arg */
-    const [tag, ...css_classes] = arg.split(".");
-    const element = new (this.get(tag))();
-    /* Add css classes */
-    if (css_classes.length > 0) {
-      /* NOTE Condition avoids adding empty class attr */
-      element.classList.add(...css_classes);
-    }
-    element.update(updates);
 
-    /* Parse args (children and hooks) */
-    parent = parent && element.parentElement !== parent ? parent : undefined;
-    const fragment = document.createElement("div");
-    for (const arg of args) {
-      if (arg === undefined) {
-        continue;
-      }
-      if (typeof arg === "function") {
-        arg.call(element, fragment, parent);
-        continue;
-      }
-      fragment.append(arg);
-    }
-    /* Append children */
-    element.append(...fragment.children);
 
-    /* Add to parent */
-    if (parent) {
-      parent.append(element);
-      parent.dispatchEvent(new CustomEvent("child", { detail: element }));
-    } else {
-    }
-    return element;
-  };
 
   /* Returns non-autonomous web component class. */
   get = (tag) => {
@@ -294,36 +262,39 @@ const components = new (class Components {
       return this.#registry[tag];
     }
 
-    const native = document.createElement(tag).constructor;
-    if (native === HTMLUnknownElement) {
-      throw new Error(`Invalid tag: ${tag}`);
-    }
 
-    const factories = this.factories.get(tag)
 
-    const WebComponent = this.author(native, ...factories);
 
-    customElements.define(`native-${tag}`, WebComponent, {
-      extends: tag,
-    });
+    const WebComponent = this.#create(tag);
     this.#registry[tag] = WebComponent;
     return WebComponent;
   };
 
-  author = (native, ...factories) => {
-    let WebComponent = factories.shift()(native);
-    for (const factory of factories) {
-      WebComponent = factory(WebComponent);
-    }
-    return WebComponent;
-  };
-})();
 
-/* Factories */
-components.factories.add(
-  (tag) => true,
-  (parent) => {
-    return class Base extends parent {
+  #author = (native, config = {}, ...factories) => {
+    let WebComponent = factories.shift()(native, config);
+    for (const factory of factories) {
+      const result = factory(WebComponent, config, ...factories);
+      if (result) {
+        WebComponent = result;
+      }
+    }
+    Object.freeze(config);
+    WebComponent.__config__ = config;
+    return WebComponent;
+  }
+
+
+
+
+
+  #create = (tag) => {
+    const base = document.createElement(tag).constructor;
+    if (base === HTMLUnknownElement) {
+      throw new Error(`Invalid tag: ${tag}`);
+    }
+
+    let WebComponent = class Base extends base {
       constructor() {
         super();
         /* Identify as web component. */
@@ -353,7 +324,7 @@ components.factories.add(
       });
 
       /* Returns an object, from which single state items can be retrieved 
-    and set to trigger effects. */
+      and set to trigger effects. */
       get $() {
         return this.#reactive.$;
       }
@@ -425,11 +396,11 @@ components.factories.add(
       #css_var = new Proxy(this, {
         get(target, key) {
           /* 
-      TODO 
-      Perhaps provide additional ways to retrieve css var?
-      Not sure, if the current approach is adequate, if css var has been set inline?
-      Do some testing to check...  
-      */
+        TODO 
+        Perhaps provide additional ways to retrieve css var?
+        Not sure, if the current approach is adequate, if css var has been set inline?
+        Do some testing to check...  
+        */
           return getComputedStyle(target).getPropertyValue(`--${key}`).trim();
         },
         set(target, key, value) {
@@ -473,10 +444,10 @@ components.factories.add(
       }
 
       /* Returns array of unique descendant elements that match ANY selectors. 
-    Returns null, if no matches.
-    A more versatile alternative to querySelectorAll with a return value 
-    that array methods can be used directly on (unless null)
-    - And I can avoid writing the clunky 'querySelectorAll' :-) */
+      Returns null, if no matches.
+      A more versatile alternative to querySelectorAll with a return value 
+      that array methods can be used directly on (unless null)
+      - And I can avoid writing the clunky 'querySelectorAll' :-) */
       get = (...selectors) => {
         const elements = [
           ...new Set(
@@ -485,15 +456,15 @@ components.factories.add(
               .flat()
           ),
         ];
-        return elements.lenght === 0 ? null : elements;
+        return elements.lenght === 0 ? null : elements
       };
 
       /* Dispatches custom event and returns detail. */
       send = (type, { detail, ...options } = {}) => {
         this.dispatchEvent(new CustomEvent(type, { detail, ...options }));
         /* NOTE If detail is mutable, it's handy to get it back, 
-      since handler may have mutated it. This enables two-way communication 
-      between event target and handler. */
+        since handler may have mutated it. This enables two-way communication 
+        between event target and handler. */
         return detail;
       };
 
@@ -526,41 +497,102 @@ components.factories.add(
         }
       };
     };
-  }
-);
-
-components.factories.add(
-  (tag) => {
-    const element = document.createElement(tag);
-    try {
-      element.attachShadow({ mode: "open" });
-      return true;
-    } catch {
-      return false;
+    if (Factory.#can_have_shadow(tag)) {
+      WebComponent = class ShadowBase extends WebComponent {
+        constructor(...args) {
+          super(...args);
+          /* Init shadow-dom-enabled state */
+          this.$.has_children = false;
+          this.$.has_content = false;
+          this.attachShadow({ mode: "open" });
+          const slot = document.createElement("slot");
+          this.shadowRoot.append(slot);
+          slot.addEventListener("slotchange", (event) => {
+            this.dispatchEvent(new Event("slotchange"));
+            /* Update state */
+            this.$.has_children = this.children.length > 0;
+            this.$.has_content = this.childNodes.length > 0;
+          });
+        }
+      };
     }
-  },
-  (parent) => {
-    return class Shadow extends parent {
-      constructor(...args) {
-        super(...args);
-        /* Init shadow-dom-enabled state */
-        this.$.has_children = false;
-        this.$.has_content = false;
+    customElements.define(`native-${tag}`, WebComponent, {
+      extends: tag,
+    });
+    return WebComponent;
+  };
+})();
 
-        this.attachShadow({ mode: "open" });
-        const slot = document.createElement("slot");
-        this.shadowRoot.append(slot);
 
-        slot.addEventListener("slotchange", (event) => {
-          this.send("slotchange");
-          /* Update state */
-          this.$.has_children = this.children.length > 0;
-          this.$.has_content = this.childNodes.length > 0;
-        });
-      }
-    };
+/* Factories */
+class FactoryBase {
+  condition(tag) {
+    throw new Error('FactoryBase not intended for direct use')
   }
-);
+  
+  factory(parent, config, ...factories) {
+    throw new Error('FactoryBase not intended for direct use')
+  }
+
+}
+
+const base_factory = new (class BaseFactory {
+  condition(tag) {
+    return true
+  }
+  
+  factory(parent, config, ...factories) {
+
+  }
+})()
+
+
+
+
+
+
+
+
+
+
+
+export const components = new (class Components {
+  create = (arg, { parent, ...updates } = {}, ...args) => {
+    /* Extract tag and css_classes from arg */
+    const [tag, ...css_classes] = arg.split(".");
+    const element = new (factory.get(tag))();
+    /* Add css classes */
+    if (css_classes.length > 0) {
+      /* NOTE Condition avoids adding empty class attr */
+      element.classList.add(...css_classes);
+    }
+    element.update(updates);
+
+    /* Parse args (children and hooks) */
+    parent = parent && element.parentElement !== parent ? parent : undefined;
+    const fragment = document.createElement("div");
+    for (const arg of args) {
+      if (arg === undefined) {
+        continue;
+      }
+      if (typeof arg === "function") {
+        arg.call(element, fragment, parent);
+        continue;
+      }
+      fragment.append(arg);
+    }
+    /* Append children */
+    element.append(...fragment.children);
+
+    /* Add to parent */
+    if (parent) {
+      parent.append(element);
+      parent.dispatchEvent(new CustomEvent("child", { detail: element }));
+    } else {
+    }
+    return element;
+  };
+})();
 
 export const create = components.create;
 
