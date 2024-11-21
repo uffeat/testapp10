@@ -24,22 +24,49 @@
         };
       };
 
-      const SomeText = decorate(
-        function SomeText() {
+      const MyContainer = decorate(
+        function MyContainer() {
           return create("", { text: "some text..." });
         },
         add_name,
         add_stuff
       );
 
-      const some_text = SomeText();
-      document.body.append(some_text);
+      const my_container = MyContainer();
 
-      some_text.effects.add((data) => console.log(data.foo.current), 'foo')
-      console.log(some_text.$.foo)
-      const set_protected = some_text.reactive.protected.add('foo')
+      my_container.on.child_added = (event) => {
+        console.log('Child added:', event.detail.added_child)
+      }
+
+      my_container.on.child_removed = (event) => {
+        console.log('Child removed:', event.detail.removed_child)
+      }
+
+
+
+      my_container.child_observer.use = true;
+
+
+
+      document.body.append(my_container);
+
+      my_container.effects.add((data) => console.log(data.foo.current), 'foo')
+      console.log(my_container.$.foo)
+      const set_protected = my_container.reactive.protected.add('foo')
       set_protected(42)
-      console.log(some_text.$.foo)
+      console.log(my_container.$.foo)
+
+      my_container.on.slotchange = (event) => {
+        console.log('slotchange')
+      }
+
+
+
+
+      const button = create('button', {text: "Button", parent: my_container})
+      //setTimeout(() => {button.remove()}, 0)
+      //my_container.append(button)
+      button.remove()
 
       /*
 
