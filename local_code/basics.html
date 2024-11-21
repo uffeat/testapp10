@@ -6,14 +6,41 @@
     <link rel="shortcut icon" href="#" type="image/x-icon" />
     <title>Basics</title>
     <script type="module">
-      const { create } = await import("./rollo.js");
+      const { create, decorate } = await import("./rollo.js");
 
-      const my_component = create('div', {text: "some text..."})
+      const add_name = (constructor) => {
+        return (...args) => {
+          const component = constructor(...args);
+          component.dataset.constructorName = constructor.name;
+          return component;
+        };
+      };
 
-      console.log(my_component.chain)
-      console.log(my_component.__chain__)
+      const add_stuff = (constructor) => {
+        return (...args) => {
+          const component = constructor(...args);
+          component.classList.add("stuff");
+          return component;
+        };
+      };
 
-     
+      const SomeText = decorate(
+        function SomeText() {
+          return create("", { text: "some text..." });
+        },
+        add_name,
+        add_stuff
+      );
+
+      const some_text = SomeText();
+      document.body.append(some_text);
+
+      some_text.effects.add((data) => console.log(data.foo.current), 'foo')
+      console.log(some_text.$.foo)
+      const set_protected = some_text.reactive.protected.add('foo')
+      set_protected(42)
+      console.log(some_text.$.foo)
+
       /*
 
       const button = create('button', {text: "some text..."})
@@ -36,8 +63,6 @@
       button.__.stuff = 'none'
       button.on.click = ((event) => {console.log('clicked')})
       */
-
-
     </script>
   </head>
   <body></body>

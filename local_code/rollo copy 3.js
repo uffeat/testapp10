@@ -15,7 +15,7 @@ class Reactive {
   #name;
   #owner;
   #previous = {};
-  #protected;
+  #protected = {}
 
   constructor(state, { name, owner } = {}) {
     this.#name = name;
@@ -23,34 +23,8 @@ class Reactive {
     if (state) {
       this.#update_stores(state);
     }
-
+    /* Enable reference in EffectController */
     const reactive = this;
-
-    this.#protected = new (class Protected {
-      #registry = {};
-
-      add = (key, value) => {
-        const set = (value) => {
-          if (!reactive.#is_equal(value, reactive.#current[key])) {
-            reactive.#update_stores({ [key]: value });
-            reactive.#notify(reactive.#create_effect_data(key), this);
-          }
-        };
-        this.#registry[key] = set;
-        if (value !== undefined) {
-          set(value)
-        }
-        return set
-      };
-
-      clear = () => {
-        this.#registry[key] = {}
-      }
-
-      has = (key) => {
-        return key in this.#registry;
-      };
-    })();
 
     /* Storage util for, potentially conditional, effect functions. */
     this.#effect_controller = new (class EffectController {
@@ -168,7 +142,7 @@ class Reactive {
   clear = () => {
     this.#previous = this.#current;
     this.#current = {};
-    this.protected.clear()
+    this.#protected = {}
     return this;
   };
 
@@ -181,10 +155,6 @@ class Reactive {
   /* Returns a shallowly frozen shallow copy of underlying state data. */
   get current() {
     return Object.freeze({ ...this.#current });
-  }
-
-  get protected() {
-    return this.#protected;
   }
 
   /* Updates state from data (object). Chainable.
@@ -217,20 +187,27 @@ class Reactive {
     return data;
   };
 
+  register_protected = (key) => {
+    this.#protected[key] = true
+    const set_protected = (value) => {
+      if (this.#current[key] !== value) {
+        this.#update_stores({[key]: value})
+        this.#notify(this.#create_effect_data(key), this);
+      }
+    }
+    return set_protected
+  }
+
   /* Compares current with 'data'. Returns null, if all items in 'data' 
   are present in current; otherwise, an object with 'data' items that are 
   different from current is returned. */
   #get_changes = (data) => {
     const changes = {};
     for (const [key, value] of Object.entries(data)) {
-      if (this.protected.has(key)) {
-        throw new Error(`'${key}' is protected.`);
+      if (key in this.#protected) {
+        throw new Error(`'${key}' is protected.`)
       }
-
-      if (
-        !(key in this.#current) ||
-        !this.#is_equal(value, this.#current[key])
-      ) {
+      if (!(key in this.#current) || !this.#is_equal(value, this.#current[key])) {
         changes[key] = value;
       }
     }
@@ -258,6 +235,8 @@ class Reactive {
     return this;
   };
 }
+
+// TODO Find a way to introduce private states that can be subscribed to externally, but only changed internally
 
 /* Uility for composing and registering non-autonomous web components on demand. */
 const components = new (class Components {
@@ -375,9 +354,7 @@ const components = new (class Components {
       chain.push(cls);
     }
 
-    /* Create __chain__ as instance prop that returns a frozen array of prototypes in mro.
-    NOTE __chain__ represents the prototype chain as created here. 
-    If the chain is subsequently tinkred with, use the 'chain' prop provided by the chain factory. */
+    /* Create chain as instance prop */
     const __chain__ = Object.freeze(chain.reverse());
     Object.defineProperty(cls.prototype, "__chain__", {
       configurable: true,
@@ -394,24 +371,21 @@ const components = new (class Components {
   #base = (native) => {
     /* Base factory that 'Components' relies on */
     const cls = class ReactiveBase extends native {
-      #set_connected
       constructor(...args) {
         super(...args);
         /* Identify as web component. */
         this.setAttribute("web-component", "");
-        this.#set_connected = this.reactive.protected.add('connected')
-        
       }
 
       connectedCallback() {
         super.connectedCallback && super.connectedCallback();
-        this.#set_connected(true)
+        this.$.connected = true;
         this.dispatchEvent(new Event("connected"));
       }
 
       disconnectedCallback() {
         super.disconnectedCallback && super.disconnectedCallback();
-        this.#set_connected(false)
+        this.$.connected = false;
         this.dispatchEvent(new Event("disconnected"));
       }
 
@@ -631,18 +605,11 @@ components.factories.add(
   (parent) => {
     /* Factory for components that support shadow dom */
     const cls = class Shadow extends parent {
-      #set_has_children
-      #set_has_content
       constructor(...args) {
         super(...args);
         /* Init shadow-dom-enabled state */
-        this.#set_has_children = this.reactive.protected.add('has_children', false)
-        this.#set_has_content = this.reactive.protected.add('has_content', false)
-
-
-
-        
-        
+        this.$.has_children = false;
+        this.$.has_content = false;
 
         this.attachShadow({ mode: "open" });
         const slot = document.createElement("slot");
@@ -650,11 +617,9 @@ components.factories.add(
 
         slot.addEventListener("slotchange", (event) => {
           this.send("slotchange");
-          /* Update protected state */
-          this.#set_has_children(this.children.length > 0)
-          this.#set_has_content(this.childNodes.length > 0)
-         
-         
+          /* Update state */
+          this.$.has_children = this.children.length > 0;
+          this.$.has_content = this.childNodes.length > 0;
         });
       }
     };

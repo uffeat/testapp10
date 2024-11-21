@@ -9,13 +9,12 @@ class Reactive {
       effect(...args);
     }
   };
-  #current = {};
+  #data = {};
   #effect_registry = new Map();
   #effect_controller;
   #name;
   #owner;
-  #previous = {};
-  #protected;
+  #previous_data = {};
 
   constructor(state, { name, owner } = {}) {
     this.#name = name;
@@ -24,33 +23,8 @@ class Reactive {
       this.#update_stores(state);
     }
 
+    /* Enable reference in EffectController */
     const reactive = this;
-
-    this.#protected = new (class Protected {
-      #registry = {};
-
-      add = (key, value) => {
-        const set = (value) => {
-          if (!reactive.#is_equal(value, reactive.#current[key])) {
-            reactive.#update_stores({ [key]: value });
-            reactive.#notify(reactive.#create_effect_data(key), this);
-          }
-        };
-        this.#registry[key] = set;
-        if (value !== undefined) {
-          set(value)
-        }
-        return set
-      };
-
-      clear = () => {
-        this.#registry[key] = {}
-      }
-
-      has = (key) => {
-        return key in this.#registry;
-      };
-    })();
 
     /* Storage util for, potentially conditional, effect functions. */
     this.#effect_controller = new (class EffectController {
@@ -70,7 +44,7 @@ class Reactive {
         Reactive.#call_effect(
           effect,
           condition,
-          reactive.#create_effect_data(...Object.keys(reactive.#current)),
+          reactive.#create_effect_data(...Object.keys(reactive.#data)),
           reactive
         );
         /* Return effect, so that effects added with function expressions
@@ -148,11 +122,12 @@ class Reactive {
   /* Returns object,from which individual state items can be retrieved and set 
   reactively. */
   get $() {
-    return this.#$;
+    return this.#state;
   }
-  #$ = new Proxy(this, {
+
+  #state = new Proxy(this, {
     get: (target, key) => {
-      return this.#current[key];
+      return this.#data[key];
     },
     set: (target, key, value) => {
       /* Handle function value */
@@ -166,25 +141,20 @@ class Reactive {
 
   /* Clears state data without publication. Use with caution. Chainable. */
   clear = () => {
-    this.#previous = this.#current;
-    this.#current = {};
-    this.protected.clear()
+    this.#previous_data = this.#data;
+    this.#data = {};
     return this;
   };
 
   /* Returns a shallowly frozen shallow copy of underlying state data as it was 
   before the most recent change. */
   get previous() {
-    return Object.freeze({ ...this.#previous });
+    return Object.freeze({ ...this.#previous_data });
   }
 
   /* Returns a shallowly frozen shallow copy of underlying state data. */
-  get current() {
-    return Object.freeze({ ...this.#current });
-  }
-
-  get protected() {
-    return this.#protected;
+  get state() {
+    return Object.freeze({ ...this.#data });
   }
 
   /* Updates state from data (object). Chainable.
@@ -209,28 +179,21 @@ class Reactive {
     const data = {};
     for (const key of keys) {
       data[key] = {
-        current: this.#current[key],
-        previous: this.#previous[key],
+        current: this.#data[key],
+        previous: this.#previous_data[key],
       };
     }
     Object.freeze(data);
     return data;
   };
 
-  /* Compares current with 'data'. Returns null, if all items in 'data' 
-  are present in current; otherwise, an object with 'data' items that are 
-  different from current is returned. */
+  /* Compares state data with 'data'. Returns null, if all items in 'data' 
+  are present in state data; otherwise, an object with 'data' items that are 
+  different from state data is returned. */
   #get_changes = (data) => {
     const changes = {};
     for (const [key, value] of Object.entries(data)) {
-      if (this.protected.has(key)) {
-        throw new Error(`'${key}' is protected.`);
-      }
-
-      if (
-        !(key in this.#current) ||
-        !this.#is_equal(value, this.#current[key])
-      ) {
+      if (!(key in this.#data) || !this.#is_equal(value, this.#data[key])) {
         changes[key] = value;
       }
     }
@@ -251,13 +214,16 @@ class Reactive {
 
   /* Updates stores with 'data'. Chainable. */
   #update_stores = (data) => {
-    this.#previous = this.#current;
+    this.#previous_data = this.#data;
     for (const [key, value] of Object.entries(data)) {
-      this.#current[key] = value;
+      this.#data[key] = value;
     }
     return this;
   };
 }
+
+// TODO Find a way to introduce private states that can be subscribed to externally, but only changed internally
+
 
 /* Uility for composing and registering non-autonomous web components on demand. */
 const components = new (class Components {
@@ -318,6 +284,9 @@ const components = new (class Components {
 
     /* Parse args (children and hooks) */
 
+
+   
+
     // TODO Perhaps a dedicated web component for this job?
 
     /* Use a div component instead of an actual fragment to provide a richer set of features */
@@ -375,9 +344,7 @@ const components = new (class Components {
       chain.push(cls);
     }
 
-    /* Create __chain__ as instance prop that returns a frozen array of prototypes in mro.
-    NOTE __chain__ represents the prototype chain as created here. 
-    If the chain is subsequently tinkred with, use the 'chain' prop provided by the chain factory. */
+    /* Create chain as instance prop */
     const __chain__ = Object.freeze(chain.reverse());
     Object.defineProperty(cls.prototype, "__chain__", {
       configurable: true,
@@ -394,24 +361,21 @@ const components = new (class Components {
   #base = (native) => {
     /* Base factory that 'Components' relies on */
     const cls = class ReactiveBase extends native {
-      #set_connected
       constructor(...args) {
         super(...args);
         /* Identify as web component. */
         this.setAttribute("web-component", "");
-        this.#set_connected = this.reactive.protected.add('connected')
-        
       }
 
       connectedCallback() {
         super.connectedCallback && super.connectedCallback();
-        this.#set_connected(true)
+        this.$.connected = true;
         this.dispatchEvent(new Event("connected"));
       }
 
       disconnectedCallback() {
         super.disconnectedCallback && super.disconnectedCallback();
-        this.#set_connected(false)
+        this.$.connected = false;
         this.dispatchEvent(new Event("disconnected"));
       }
 
@@ -631,18 +595,11 @@ components.factories.add(
   (parent) => {
     /* Factory for components that support shadow dom */
     const cls = class Shadow extends parent {
-      #set_has_children
-      #set_has_content
       constructor(...args) {
         super(...args);
         /* Init shadow-dom-enabled state */
-        this.#set_has_children = this.reactive.protected.add('has_children', false)
-        this.#set_has_content = this.reactive.protected.add('has_content', false)
-
-
-
-        
-        
+        this.$.has_children = false;
+        this.$.has_content = false;
 
         this.attachShadow({ mode: "open" });
         const slot = document.createElement("slot");
@@ -650,11 +607,9 @@ components.factories.add(
 
         slot.addEventListener("slotchange", (event) => {
           this.send("slotchange");
-          /* Update protected state */
-          this.#set_has_children(this.children.length > 0)
-          this.#set_has_content(this.childNodes.length > 0)
-         
-         
+          /* Update state */
+          this.$.has_children = this.children.length > 0;
+          this.$.has_content = this.childNodes.length > 0;
         });
       }
     };
