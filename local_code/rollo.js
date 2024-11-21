@@ -224,9 +224,28 @@ class Reactive {
 
 /* Uility for composing and registering non-autonomous web components on demand. */
 const components = new (class Components {
-  
-  #registry = {};
+  get registry() {
+    return this.#registry;
+  }
+  #registry = new (class Registry {
+    #registry = {};
+    /*  */
+    add = (tag, cls) => {
+      customElements.define(`native-${tag}`, cls, {
+        extends: tag,
+      });
+      this.#registry[tag] = cls;
+      return cls;
+    };
+    /*  */
+    get = (tag) => {
+      return this.#registry[tag];
+    };
+  })();
 
+  get factories() {
+    return this.#factories;
+  }
   #factories = new (class Factories {
     #registry = [];
     /* Registers conditional web component class factory */
@@ -235,19 +254,11 @@ const components = new (class Components {
     };
     /* Returns factories relevant for a given tag */
     get = (tag) => {
-      const factories = [];
-      for (const [condition, factory] of this.#registry) {
-        if (condition(tag)) {
-          factories.push(factory);
-        }
-      }
-      return factories
+      return this.#registry
+        .filter(([condition, factory]) => condition(tag))
+        .map(([condition, factory]) => factory);
     };
-  })()
-
-  get factories() {
-    return this.#factories
-  };
+  })();
 
   /* Returns instance of non-autonomous web component  */
   create = (arg, { parent, ...updates } = {}, ...args) => {
@@ -260,7 +271,6 @@ const components = new (class Components {
       element.classList.add(...css_classes);
     }
     element.update(updates);
-
     /* Parse args (children and hooks) */
     parent = parent && element.parentElement !== parent ? parent : undefined;
     const fragment = document.createElement("div");
@@ -288,48 +298,46 @@ const components = new (class Components {
 
   /* Returns non-autonomous web component class. */
   get = (tag) => {
-    if (tag in this.#registry) {
-      return this.#registry[tag];
+    let cls = this.registry.get(tag);
+    if (cls) {
+      return cls;
     }
     const native = document.createElement(tag).constructor;
     if (native === HTMLUnknownElement) {
       throw new Error(`Invalid tag: ${tag}`);
     }
-
-    const factories = this.factories.get(tag)
-
-    const WebComponent = this.author(native, ...factories);
-
-    customElements.define(`native-${tag}`, WebComponent, {
-      extends: tag,
-    });
-    this.#registry[tag] = WebComponent;
-    return WebComponent;
+    const factories = this.factories.get(tag);
+    cls = this.author(native, ...factories);
+    return this.registry.add(tag, cls);
   };
 
   /* Builds and returns web component class from native base and factories. */
   author = (native, ...factories) => {
-    let WebComponent = this.#base(native);
+    let cls = this.#base(native);
     for (const factory of factories) {
-      WebComponent = factory(WebComponent);
+      cls = factory(cls);
     }
-    return WebComponent;
+    return cls;
   };
 
+  /* Returns base factory to be used for all web components. */
   #base = (native) => {
-    return class ReactiveBase extends native {
-      constructor() {
-        super();
+    /* Base factory that 'Components' relies on */
+    const cls = class ReactiveBase extends native {
+      constructor(...args) {
+        super(...args);
         /* Identify as web component. */
         this.setAttribute("web-component", "");
       }
 
       connectedCallback() {
+        super.connectedCallback && super.connectedCallback();
         this.$.connected = true;
         this.dispatchEvent(new Event("connected"));
       }
 
       disconnectedCallback() {
+        super.disconnectedCallback && super.disconnectedCallback();
         this.$.connected = false;
         this.dispatchEvent(new Event("disconnected"));
       }
@@ -354,17 +362,18 @@ const components = new (class Components {
         return this.#reactive.$;
       }
 
-      /* Returns controller for managing subscriptions. */
+      /* Returns controller for managing effects. */
       get effects() {
         return this.#reactive.effects;
       }
 
+      /* Exposes reactive instance for full access */
       get reactive() {
         return this.#reactive;
       }
       #reactive = Reactive.create(null, { owner: this });
 
-      /* Updates props and state. */
+      /* Updates props and state. Chainable. */
       update = (updates) => {
         const props = Object.fromEntries(
           Object.entries(updates).filter(([key, value]) => !key.startsWith("$"))
@@ -380,41 +389,39 @@ const components = new (class Components {
             throw new Error(`Invalid key: ${key}`);
           }
         }
-
         const state = Object.fromEntries(
           Object.entries(updates)
             .filter(([key, value]) => key.startsWith("$"))
             .map(([key, value]) => [key.slice(1), value])
         );
         this.reactive.update(state);
+        return this;
       };
-
-
-
-    }
-  }
+    };
+    return cls;
+  };
 })();
 
 /* Factories */
+
 components.factories.add(
   (tag) => true,
   (parent) => {
-    return class Component extends parent {
-      constructor() {
-        super();
+    function camel_to_kebab(camel) {
+      return camel.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+    }
 
+    /* General factory for all components */
+    const cls = class Component extends parent {
+      constructor(...args) {
+        super(...args);
       }
-      
 
-      
-
-      
-
-      /* Provides a prop-like interface to attrs. */
+      /* Getter/setter interface to attributes. */
       get attribute() {
-        return this.#attr;
+        return this.#attribute;
       }
-      #attr = new Proxy(this, {
+      #attribute = new Proxy(this, {
         get(target, key) {
           key = camel_to_kebab(key);
           if (!target.hasAttribute(key)) {
@@ -452,11 +459,11 @@ components.factories.add(
         },
       });
 
-      /* Provides a prop-like interface to controlling css class. */
+      /* Getter/setter interface to css classes. */
       get css() {
-        return this.#css_class;
+        return this.#css;
       }
-      #css_class = new Proxy(this, {
+      #css = new Proxy(this, {
         get(target, css_class) {
           return target.classList.contains(css_class);
         },
@@ -470,11 +477,11 @@ components.factories.add(
         },
       });
 
-      /* Provides a prop-like interface to component-scoped css vars. */
+      /* Getter/setter interface component-scoped css vars. */
       get __() {
-        return this.#css_var;
+        return this.#__;
       }
-      #css_var = new Proxy(this, {
+      #__ = new Proxy(this, {
         get(target, key) {
           /* 
       TODO 
@@ -494,8 +501,7 @@ components.factories.add(
         },
       });
 
-      
-
+      /* Syntactic sugar for event handler registration. */
       get on() {
         return this.#on;
       }
@@ -509,20 +515,10 @@ components.factories.add(
         },
       });
 
-      
-
-      get text() {
-        return this.textContent;
-      }
-      set text(text) {
-        this.textContent = text;
-      }
-
       /* Returns array of unique descendant elements that match ANY selectors. 
-    Returns null, if no matches.
-    A more versatile alternative to querySelectorAll with a return value 
-    that array methods can be used directly on (unless null)
-    - And I can avoid writing the clunky 'querySelectorAll' :-) */
+      Returns null, if no matches.
+      A more versatile alternative to querySelectorAll with a return value 
+      that array methods can be used directly on (unless null) */
       get = (...selectors) => {
         const elements = [
           ...new Set(
@@ -538,13 +534,12 @@ components.factories.add(
       send = (type, { detail, ...options } = {}) => {
         this.dispatchEvent(new CustomEvent(type, { detail, ...options }));
         /* NOTE If detail is mutable, it's handy to get it back, 
-      since handler may have mutated it. This enables two-way communication 
-      between event target and handler. */
+        since handler may have mutated it. This enables two-way communication 
+        between event target and handler. */
         return detail;
       };
-
-      
     };
+    return cls;
   }
 );
 
@@ -559,7 +554,8 @@ components.factories.add(
     }
   },
   (parent) => {
-    return class Shadow extends parent {
+    /* Factory for components that support shadow dom */
+    const cls = class Shadow extends parent {
       constructor(...args) {
         super(...args);
         /* Init shadow-dom-enabled state */
@@ -578,6 +574,30 @@ components.factories.add(
         });
       }
     };
+    return cls;
+  }
+);
+
+components.factories.add(
+  (tag) => {
+    const element = document.createElement(tag);
+    return "textContent" in element;
+  },
+  (parent) => {
+    /* Factory for components with 'textContent' prop */
+    const cls = class Text extends parent {
+      constructor(...args) {
+        super(...args);
+      }
+
+      get text() {
+        return this.textContent;
+      }
+      set text(text) {
+        this.textContent = text;
+      }
+    };
+    return cls;
   }
 );
 
@@ -613,10 +633,4 @@ export function mixin(source, ...args) {
     Object.defineProperty(this, name, descriptor);
   }
   return this;
-}
-
-/* Private helpers */
-
-function camel_to_kebab(camel) {
-  return camel.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }
