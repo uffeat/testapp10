@@ -326,8 +326,17 @@ const components = new (class Components {
       names.push(cls.name);
       chain.push(cls);
     }
-  
-    cls.__chain__ = Object.freeze(chain.reverse())
+
+    /* Create chain as instance prop */
+    const __chain__ = Object.freeze(chain.reverse());
+    Object.defineProperty(cls.prototype, "__chain__", {
+      configurable: true,
+      enumerable: false,
+      get: function () {
+        return __chain__;
+      },
+    });
+
     return cls;
   };
 
@@ -335,29 +344,12 @@ const components = new (class Components {
   #base = (native) => {
     /* Base factory that 'Components' relies on */
     const cls = class ReactiveBase extends native {
+      
+
       constructor(...args) {
         super(...args);
         /* Identify as web component. */
         this.setAttribute("web-component", "");
-
-        //console.log(Object.getPrototypeOf(this).constructor)
-        //console.log(Object.getOwnPropertyNames(this.constructor))
-
-        console.log(this.constructor.__chain__)
-
-        const chain = [];
-        let proto = Object.getPrototypeOf(this).constructor;
-        while (proto !== HTMLElement) {
-          chain.push(proto);
-          //console.log(proto)
-          proto = Object.getPrototypeOf(proto);
-        }
-
-        console.log(chain);
-
-        //console.log(proto)
-        //console.log(proto.constructor)
-        //console.log(Object.getOwnPropertyNames(proto))
       }
 
       connectedCallback() {
@@ -434,6 +426,7 @@ const components = new (class Components {
 
 /* Factories */
 
+/* Component */
 components.factories.add(
   (tag) => true,
   (parent) => {
@@ -573,6 +566,7 @@ components.factories.add(
   }
 );
 
+/* Shadow */
 components.factories.add(
   (tag) => {
     const element = document.createElement(tag);
@@ -608,6 +602,7 @@ components.factories.add(
   }
 );
 
+/* Text */
 components.factories.add(
   (tag) => {
     const element = document.createElement(tag);
@@ -626,10 +621,42 @@ components.factories.add(
       set text(text) {
         this.textContent = text;
       }
+
+      
     };
     return cls;
   }
 );
+
+/* Chain */
+components.factories.add(
+  (tag) => true,
+  (parent) => {
+    /*  */
+    const cls = class Chain extends parent {
+      constructor(...args) {
+        super(...args);
+      }
+
+      get chain() {
+        const chain = [];
+        let proto = Object.getPrototypeOf(this).constructor;
+        while (proto !== HTMLElement) {
+          chain.push(proto);
+          //console.log(proto)
+          proto = Object.getPrototypeOf(proto);
+        }
+        return chain;
+      };
+
+      
+
+      
+    };
+    return cls;
+  }
+);
+
 
 export const create = components.create;
 

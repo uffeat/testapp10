@@ -8,7 +8,10 @@
     <script type="module">
       const { create } = await import("./rollo.js");
 
-      create('div', {text: "some text..."})
+      const my_component = create('div', {text: "some text..."})
+
+      console.log(my_component.chain)
+      console.log(my_component.__chain__)
 
      
       /*
