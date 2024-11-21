@@ -314,9 +314,20 @@ const components = new (class Components {
   /* Builds and returns web component class from native base and factories. */
   author = (native, ...factories) => {
     let cls = this.#base(native);
+    const names = [cls.name];
+    const chain = [native, cls];
     for (const factory of factories) {
       cls = factory(cls);
+      if (names.includes(cls.name)) {
+        console.warn(
+          `Factory class names should be unique for better traceability. Got duplicate: ${cls.name}`
+        );
+      }
+      names.push(cls.name);
+      chain.push(cls);
     }
+  
+    cls.__chain__ = Object.freeze(chain.reverse())
     return cls;
   };
 
@@ -328,6 +339,25 @@ const components = new (class Components {
         super(...args);
         /* Identify as web component. */
         this.setAttribute("web-component", "");
+
+        //console.log(Object.getPrototypeOf(this).constructor)
+        //console.log(Object.getOwnPropertyNames(this.constructor))
+
+        console.log(this.constructor.__chain__)
+
+        const chain = [];
+        let proto = Object.getPrototypeOf(this).constructor;
+        while (proto !== HTMLElement) {
+          chain.push(proto);
+          //console.log(proto)
+          proto = Object.getPrototypeOf(proto);
+        }
+
+        console.log(chain);
+
+        //console.log(proto)
+        //console.log(proto.constructor)
+        //console.log(Object.getOwnPropertyNames(proto))
       }
 
       connectedCallback() {

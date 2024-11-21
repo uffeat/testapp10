@@ -8,10 +8,12 @@
     <script type="module">
       const { create } = await import("./rollo.js");
 
-      const button = create('button', {text: "some text..."})
+      create('div', {text: "some text..."})
 
      
+      /*
 
+      const button = create('button', {text: "some text..."})
       const root = create(
         "div",
         { parent: document.body, $foo: 42 },
@@ -30,6 +32,7 @@
       button.attribute.dataMyStuff = true
       button.__.stuff = 'none'
       button.on.click = ((event) => {console.log('clicked')})
+      */
 
 
     </script>
